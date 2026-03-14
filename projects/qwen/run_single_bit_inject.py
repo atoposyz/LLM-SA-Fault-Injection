@@ -102,7 +102,7 @@ if __name__ == "__main__":
             for layernumber in target_layers:
                 current_layertype = layertype
                 
-                # 核心恢复：Qwen3.5 混合注意力架构的 3:1 Hook 挂载逻辑
+                # Qwen3.5 混合注意力架构的 3:1 Hook 挂载逻辑
                 if current_layertype in ["q", "k", "v", "o", "qkv"]:
                     if layernumber % 4 == 3 and current_layertype == "qkv":
                         # 第 3 层是 Full Attention，没有 qkv 聚合，降级为注入 q

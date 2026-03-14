@@ -5,6 +5,7 @@ requires-python = ">=3.12"
 [manifest]
 members = [
     "faultinject",
+    "gpt-oss",
     "qwen",
     "tool",
 ]
@@ -573,6 +574,11 @@ wheels = [
 http = [
     { name = "aiohttp" },
 ]
+
+[[package]]
+name = "gpt-oss"
+version = "0.1.0"
+source = { editable = "projects/gpt-oss" }
 
 [[package]]
 name = "h11"
