@@ -13,7 +13,7 @@ def print_model_layers(model, indent=0):
 
 
 if __name__ == "__main__":
-    model_id = "Qwen/Qwen3.5-4B"
+    model_id = "openai-community/gpt2"
     tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
     model = AutoModelForCausalLM.from_pretrained(model_id, device_map="auto", trust_remote_code=True)
     model.eval()
@@ -21,12 +21,12 @@ if __name__ == "__main__":
     print(model.config.num_hidden_layers)
 
     # 保存 print_model_layers 的输出
-    with open("/workplace/home/mayongzhe/faultinject/projects/qwen/config/layerstructure.txt", "w") as f1:
+    with open("/workplace/home/mayongzhe/faultinject/projects/gpt2/config/layerstructure.txt", "w") as f1:
         with redirect_stdout(f1):
             print_model_layers(model)
 
     # 保存 named_modules 输出的模块名
-    with open("/workplace/home/mayongzhe/faultinject/projects/qwen/config/layernames.txt", "w") as f2:
+    with open("/workplace/home/mayongzhe/faultinject/projects/gpt2/config/layernames.txt", "w") as f2:
         with redirect_stdout(f2):
             for name, module in model.named_modules():
                 print(name)

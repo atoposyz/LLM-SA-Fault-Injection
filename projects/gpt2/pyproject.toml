@@ -1,10 +1,7 @@
 [project]
-name = "gpt-oss"
+name = "gpt2"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-authors = [
-    { name = "xuanfly", email = "2335483715@qq.com" }
-]
 requires-python = ">=3.12"
 dependencies = []

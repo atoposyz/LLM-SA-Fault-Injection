@@ -1,10 +1,7 @@
 [project]
-name = "gpt-oss"
+name = "qwen3-0.6b"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-authors = [
-    { name = "xuanfly", email = "2335483715@qq.com" }
-]
 requires-python = ">=3.12"
 dependencies = []
