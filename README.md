@@ -4,7 +4,7 @@
 
 #### 模型
 
-BERT, Qwen3-0.6B, Qwen3-7B, (Qwen3-14B), Llama3.1-8B-instruct, Llama3.1-8B-instruct-int8量化, Qwen1.5-MoE-A2.7B, (Qwen3.5-9B)
+BERT, Qwen3-0.6B, Qwen3-8B, (Qwen3-14B), Llama3.1-8B-instruct, Llama3.1-8B-instruct-int8量化, Qwen1.5-MoE-A2.7B, (Qwen3.5-9B)
 
 #### 数据集
 
@@ -28,7 +28,7 @@ acc下降
 
 #### 模型
 
-Qwen3-7B, (可加Llama3.1-8B-instruct)
+Qwen3-8B, Llama3.1-8B-instruct, BERT, Qwen1.5-MoE-A2.7B
 
 #### 数据集
 
@@ -50,7 +50,7 @@ acc下降
 
 #### 任务1：mmlu（选择题）
 
-BERT, Qwen3-0.6B, Qwen3-7B, Llama3-8B-instruct
+BERT, Qwen3-0.6B, Qwen3-8B, Llama3-8B-instruct
 
 注错方式：随机
 
@@ -60,7 +60,7 @@ BERT, Qwen3-0.6B, Qwen3-7B, Llama3-8B-instruct
 
 #### 任务2：xlsum（文本摘要）
 
-Qwen3-7B, Llama3.1-8B-instruct
+Qwen3-8B, Llama3.1-8B-instruct
 
 注错方式：随机
 
@@ -70,7 +70,7 @@ Qwen3-7B, Llama3.1-8B-instruct
 
 #### 任务3：gsm8k（数学推理）
 
-Qwen3-7B, Llama3.1-8B（测试一下开启和不开启思考模式的区别）
+Qwen3-8B, Llama3.1-8B（测试一下开启和不开启思考模式的区别）
 
 注错方式：随机
 
@@ -86,7 +86,7 @@ Qwen3-7B, Llama3.1-8B（测试一下开启和不开启思考模式的区别）
 
 #### 模型
 
-Qwen3-0.6B, Qwen3-7B, Qwen3-14B
+Qwen3-0.6B, Qwen3-8B, Qwen3-14B
 
 #### 数据集
 
@@ -100,7 +100,7 @@ Squad 2
 
 #### 模型
 
-Qwen3-7B, Qwen1.5-MoE-A2.7B, Qwen3.5-9B
+Qwen3-8B, Qwen1.5-MoE-A2.7B, Qwen3.5-9B
 
 #### 数据集
 
