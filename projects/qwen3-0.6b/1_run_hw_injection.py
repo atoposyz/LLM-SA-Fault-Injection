@@ -39,7 +39,6 @@ def main():
     k_proj_0 = layer_0.self_attn.k_proj
     k_proj_last = last_layer.self_attn.k_proj
 
-    # 截断的 Prompt，请在实际运行时替换为你原本的完整 Prompt
     prompt = """Role: You are an expert senior researcher specializing in Computer Architecture, specifically focusing on the intersection of Large Language Models (LLMs) and hardware reliability. Your task is to provide a comprehensive, 5-stage critical review of a hypothetical research paper titled "Characterizing Soft Errors in Systolic Array-based LLM Accelerators: A Layer-wise Fault Injection Study."
 
 Context for the Task:
