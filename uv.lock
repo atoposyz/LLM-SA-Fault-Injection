@@ -4,11 +4,13 @@ requires-python = ">=3.12"
 
 [manifest]
 members = [
+    "bert",
     "faultinject",
     "gpt-oss",
     "gpt2",
     "qwen",
     "qwen3-0-6b",
+    "qwen3-8b",
     "tool",
 ]
 
@@ -139,6 +141,11 @@ sdist = { url = "https://files.pythonhosted.org/packages/5a/b0/1367933a8532ee6ff
 wheels = [
     { url = "https://files.pythonhosted.org/packages/77/06/bb80f5f86020c4551da315d78b3ab75e8228f89f0162f2c3a819e407941a/attrs-25.3.0-py3-none-any.whl", hash = "sha256:427318ce031701fea540783410126f03899a97ffc6f61596ad581ac2e40e3bc3", size = 63815, upload-time = "2025-03-13T11:10:21.14Z" },
 ]
+
+[[package]]
+name = "bert"
+version = "0.1.0"
+source = { virtual = "projects/bert" }
 
 [[package]]
 name = "certifi"
@@ -1476,6 +1483,11 @@ source = { virtual = "projects/qwen" }
 name = "qwen3-0-6b"
 version = "0.1.0"
 source = { virtual = "projects/qwen3-0.6b" }
+
+[[package]]
+name = "qwen3-8b"
+version = "0.1.0"
+source = { virtual = "projects/qwen3-8b" }
 
 [[package]]
 name = "regex"

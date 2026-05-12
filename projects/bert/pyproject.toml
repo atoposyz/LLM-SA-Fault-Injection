@@ -1,0 +1,7 @@
+[project]
+name = "bert"
+version = "0.1.0"
+description = "Fault injection experiments for boltuix/bert-emotion"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []

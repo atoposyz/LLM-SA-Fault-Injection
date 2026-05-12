@@ -488,11 +488,19 @@ def normalize_table_scores(
     table: dict,
     score_keys: list[str] | None = None,
     method: str = "minmax",
+    pre_log1p: bool = False,
 ) -> dict:
     """
     Add normalized [0,1] scores for each specified key via min-max normalisation.
     Modifies the table in place and also returns it.
+
+    When pre_log1p=True, applies log1p to severity values before normalization,
+    compressing extreme outliers (e.g. NaN/Inf-producing faults at raw ~88)
+    so that mantissa-level structure (~0.04-0.2) remains visible in the [0,1]
+    range instead of being flattened to near-zero.
     """
+    import math
+
     if score_keys is None:
         score_keys = [
             "flip_0to1_unconditional",
@@ -501,15 +509,29 @@ def normalize_table_scores(
             "sa1_unconditional",
         ]
 
+    # Collect all values across all keys for global normalization.
+    # This ensures cross-fault-type comparability: if all stuck-at values
+    # are negligible next to bit-flip values, they stay near zero instead of
+    # being stretched to [0,1] independently.
+    all_values = []
+    for entry in table["table"]:
+        for key in score_keys:
+            v = entry[key]
+            if pre_log1p:
+                v = math.log1p(v)
+            all_values.append(v)
+    vmin = min(all_values)
+    vmax = max(all_values)
+    denom = vmax - vmin
+
     for key in score_keys:
-        values = [entry[key] for entry in table["table"]]
-        vmin = min(values)
-        vmax = max(values)
-        denom = vmax - vmin
         norm_key = f"{key}_norm"
         for entry in table["table"]:
             if denom > 0:
-                entry[norm_key] = (entry[key] - vmin) / denom
+                val = entry[key]
+                if pre_log1p:
+                    val = math.log1p(val)
+                entry[norm_key] = (val - vmin) / denom
             else:
                 entry[norm_key] = 0.0
 

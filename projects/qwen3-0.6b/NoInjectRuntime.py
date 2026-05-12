@@ -24,7 +24,33 @@ def ensure_dir_with_suffix(path_value):
         path_value += "/"
     os.makedirs(path_value, exist_ok=True)
     return path_value
-def build_metrics_hook(writer, run_meta_getter):
+
+
+class RuntimeMatrixCollector:
+    def __init__(self):
+        self.records = []
+
+    def clear(self):
+        self.records = []
+
+    def capture(self, record, tensor):
+        if tensor is None or tensor.numel() == 0:
+            return
+        self.records.append((record, tensor.detach().cpu().contiguous()))
+
+    def write_metrics(self, writer):
+        for record, matrix in self.records:
+            metrics = compute_runtime_metrics(matrix)
+            if metrics is None:
+                continue
+            output_record = dict(record)
+            output_record.update(metrics)
+            writer.write_record(output_record)
+        self.clear()
+        writer.flush()
+
+
+def build_metrics_hook(writer, collector, run_meta_getter):
     def hook(module, _input_tuple, output_tuple):
         module_name = getattr(module, "_runtime_metrics_name", f"{module.__class__.__name__}_{id(module)}")
         should_capture, module_step, global_step = writer.next_step(module_name)
@@ -32,8 +58,7 @@ def build_metrics_hook(writer, run_meta_getter):
             return output_tuple
 
         output_tensor = extract_tensor(output_tuple)
-        metrics = compute_runtime_metrics(output_tensor)
-        if metrics is None:
+        if output_tensor is None:
             return output_tuple
 
         record = {
@@ -50,8 +75,7 @@ def build_metrics_hook(writer, run_meta_getter):
         }
         record.update(writer.extra_meta)
         record.update(run_meta_getter())
-        record.update(metrics)
-        writer.write_record(record)
+        collector.capture(record, output_tensor)
         return output_tuple
 
     return hook
@@ -63,7 +87,7 @@ if __name__ == "__main__":
     parser.add_argument("--outputfile", type=str, default="/workplace/home/mayongzhe/faultinject/projects/qwen/result")
     parser.add_argument("--sampleid", type=int, nargs="*", default=[], help="指定采样样本ID")
     parser.add_argument("--metricInterval", type=int, default=20, help="运行时指标采样间隔，默认20")
-    parser.add_argument("--metricOutput", type=str, default="", help="运行时指标输出 jsonl 路径")
+    parser.add_argument("--metricOutput", type=str, default="/workplace/home/mayongzhe/faultinject/projects/qwen3-0.6b/result", help="运行时指标输出 jsonl 路径")
     args = parser.parse_args()
 
     out_path = ensure_dir_with_suffix(args.outputfile)
@@ -74,7 +98,7 @@ if __name__ == "__main__":
     model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen3-0.6B", device_map="auto", trust_remote_code=True)
     model.eval()
 
-    ds = load_dataset("rajpurkar/squad", split="validation")
+    ds = load_dataset("openai/gsm8k", "main", split="train")
     random.seed(37)
     samples = random.sample(list(ds), 200)
 
@@ -94,7 +118,8 @@ if __name__ == "__main__":
     )
 
     current_meta = {}
-    metric_hook = build_metrics_hook(writer, lambda: current_meta)
+    matrix_collector = RuntimeMatrixCollector()
+    metric_hook = build_metrics_hook(writer, matrix_collector, lambda: current_meta)
 
     for idx, sample in enumerate(tqdm(samples)):
         handles = []
@@ -103,6 +128,7 @@ if __name__ == "__main__":
             extra_meta={"script": "NoInjectRuntime"},
             reset_counters=True,
         )
+        matrix_collector.clear()
 
         current_meta = {
             "sample_id": sample_index[idx],
@@ -122,9 +148,7 @@ if __name__ == "__main__":
                 {
                     "role": "user",
                     "content": (
-                        "Read the following passage and answer the question with a text span directly from the passage.\n"
-                        + sample["context"]
-                        + "\nQuestion: "
+                        "Solve the following math problem step by step.\n"
                         + sample["question"]
                         + "\nAnswer:"
                     ),
@@ -143,13 +167,15 @@ if __name__ == "__main__":
             with torch.no_grad():
                 outputs = model.generate(
                     **inputs,
-                    max_new_tokens=200,
+                    max_new_tokens=2000,
                     do_sample=False,
                     top_p=0.95,
                     temperature=0,
                     eos_token_id=tokenizer.eos_token_id,
                 )
                 token_length = outputs[0].shape[0] - num_tokens
+
+            matrix_collector.write_metrics(writer)
 
             decoded = tokenizer.decode(outputs[0], skip_special_tokens=True)
             sep = "assistant\n"
@@ -161,8 +187,8 @@ if __name__ == "__main__":
             result_data = {
                 "sample_id": sample_index[idx],
                 "token_length": token_length,
-                "reference_answer": sample["answers"],
-                "generated_answer": response.split("</think>", 1)[1].strip() if "</think>" in decoded else "",
+                "reference_answer": sample["answer"],
+                "generated_answer": response.split("</think>", 1)[1].strip() if "</think>" in response else response,
                 "fault_type": "none",
                 "inject_layer": "none",
                 "inject_kernel": "none",
@@ -176,7 +202,6 @@ if __name__ == "__main__":
             handle.write(json.dumps(result_data, ensure_ascii=False) + "\n")
             handle.flush()
 
-        writer.flush()
         for hook_handle in handles:
             hook_handle.remove()
 

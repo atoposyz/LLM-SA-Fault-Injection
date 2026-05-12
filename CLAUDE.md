@@ -10,6 +10,7 @@ Fault injection framework for studying how hardware faults (bit-flips, stuck-at)
 
 - Package manager: `uv` (workspace with members `tool` and `projects/*`)
 - Install: `uv sync`
+- Run scripts: `uv run python <script.py>`, not bare `python`
 - Python version: `>=3.12` (pinned in `.python-version`)
 - HuggingFace mirror: `HF_ENDPOINT=https://hf-mirror.com`
 

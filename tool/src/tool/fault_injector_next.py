@@ -253,7 +253,7 @@ class Fast_SA_FaultInjector:
                 # Affects Y[:, j] where j % sa_cols == c
                 affected_j = torch.where((torch.arange(N, device=device) % self.sa_cols) == c)[0]
                 
-                scale = max((K - r) / K, 0.0) if K > 0 else 1.0
+                scale = 1.0  # psum error propagates unchanged to output, no dilution
                 if affected_j.numel() > 0:
                     col_data = Y[:, affected_j]
                     # mask_val is a scalar int32 for this r,c 
@@ -362,7 +362,7 @@ class Fast_SA_FaultInjector:
                 # Affects Y[i, :] where i % sa_rows == r
                 affected_i = torch.where((torch.arange(M, device=device) % self.sa_rows) == r)[0]
                 
-                scale = max((K - c) / K, 0.0) if K > 0 else 1.0
+                scale = 1.0  # psum error propagates unchanged to output, no dilution
                 if affected_i.numel() > 0:
                     row_data = Y[affected_i, :]
                     mask_tensor = mask_val.expand(row_data.shape)

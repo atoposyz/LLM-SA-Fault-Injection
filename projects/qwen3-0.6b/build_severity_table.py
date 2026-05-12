@@ -260,7 +260,7 @@ def build_and_save(
         clip_value=clip_value,
         max_elements=max_elements,
     )
-    table = normalize_table_scores(table)
+    table = normalize_table_scores(table, pre_log1p=True)
     table["metadata"] = metadata
 
     os.makedirs(output_dir, exist_ok=True)
