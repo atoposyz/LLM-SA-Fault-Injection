@@ -22,7 +22,6 @@ def get_module_by_path(module, path: str):
         module = getattr(module, attr)
     return module
 
-# 恢复 Qwen3.5 专属的混合注意力映射字典
 pos_mapping = {
     "q": "self_attn.q_proj", 
     "k": "self_attn.k_proj", 
@@ -34,7 +33,7 @@ pos_mapping = {
 }
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Single-Bit Precise Fault Injection (Qwen3.5 Hybrid Arch)")
+    parser = argparse.ArgumentParser(description="Single-Bit Precise Fault Injection")
     parser.add_argument("--layerList", type=int, nargs='+', default=[0], help="输入错误注入层数，默认为0")
     parser.add_argument("--affect", action='store_true', help="是否开启注入后续层数，默认为False")
     parser.add_argument("--layerType",  type=str, choices=pos_mapping.keys(), default="q", help="注入层选项")
@@ -119,19 +118,13 @@ if __name__ == "__main__":
 
                 target_layers = [layerid]
                 if args.affect:
-                    target_layers = list(range(layerid, min(layerid + 4, model.config.num_hidden_layers)))
+                    target_layers = list(range(layerid, model.config.num_hidden_layers))
 
                 for layernumber in target_layers:
                     current_layertype = layertype
                     if current_layertype in pos_mapping:
-                        try:
-                            hook = get_module_by_path(model.model.layers[layernumber], pos_mapping[current_layertype])
-                            handles.append(hook.register_forward_hook(injector.hook_fn))
-                        except AttributeError as e:
-                            progress_bar.write(
-                                f"[Warning] Hook 挂载失败，层级 {layernumber}，路径 {pos_mapping[current_layertype]}。报错: {e}"
-                            )
-                            continue
+                        hook = get_module_by_path(model.model.layers[layernumber], pos_mapping[current_layertype])
+                        handles.append(hook.register_forward_hook(injector.hook_fn))
 
                 messages = [{"role": "user", "content": "Read the following passage and answer the question...\n" + sample['context'] + "\nQuestion: " + sample['question'] + "\nAnswer:"}]
                 prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
