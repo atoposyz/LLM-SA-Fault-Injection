@@ -481,7 +481,73 @@ def build_severity_lookup_table(
 
 
 # ---------------------------------------------------------------------------
-# 13. normalize_table_scores
+# 13. apply theoretical floor for exponent bits with insufficient samples
+# ---------------------------------------------------------------------------
+
+def _theoretical_exponent_severity(bit: int, precision: str = "fp32") -> float:
+    """IEEE 754 theoretical conditional severity for flipping an exponent bit.
+
+    Flipping exponent bit b changes the value by a factor of 2^(2^(b-offset)).
+    log1p(|relative_delta|) ≈ ln(2) * 2^(b - offset).
+    """
+    if precision == "fp32":
+        if not (23 <= bit <= 30):
+            return 0.0
+        offset = 23
+    elif precision == "bf16":
+        if not (7 <= bit <= 14):
+            return 0.0
+        offset = 7
+    else:
+        return 0.0
+    return math.log(2) * (2 ** (bit - offset))
+
+
+def apply_theoretical_floor(
+    table: dict,
+    min_effective_rate: float = 0.001,
+    floor_factor: float = 0.01,
+) -> dict:
+    """Patch conditional severity for exponent bits that lack calibration samples.
+
+    When a bit has near-zero effective_rate (p0≈0 or p1≈0), the calibration-based
+    conditional severity is unreliable. This function applies a theoretical floor
+    based on IEEE 754 arithmetic, ensuring the severity ranking reflects physical
+    reality rather than calibration-data artefacts.
+
+    The floor is: theoretical_conditional * min(floor_factor, effective_rate)
+    Only applied when calibrated_conditional < theoretical * floor_factor.
+    """
+    precision = table.get("precision", "fp32")
+    for entry in table["table"]:
+        b = entry["bit"]
+        theory = _theoretical_exponent_severity(b, precision)
+        if theory <= 0:
+            continue
+
+        for prefix in ["flip_0to1", "flip_1to0", "sa0", "sa1"]:
+            cond_key = f"{prefix}_conditional"
+            eff_key = f"{prefix}_effective_rate"
+            if cond_key not in entry:
+                continue
+            cal_val = entry[cond_key]
+            eff = entry.get(eff_key, 0.0)
+            threshold = theory * floor_factor
+
+            if cal_val < threshold:
+                proxy_eff = max(eff, min_effective_rate)
+                floor_val = theory * proxy_eff
+                entry[cond_key] = max(cal_val, floor_val)
+                # Recompute unconditional = conditional * effective_rate
+                uncond_key = f"{prefix}_unconditional"
+                if uncond_key in entry:
+                    entry[uncond_key] = entry[cond_key] * eff
+
+    return table
+
+
+# ---------------------------------------------------------------------------
+# 14. normalize_table_scores
 # ---------------------------------------------------------------------------
 
 def normalize_table_scores(
@@ -491,13 +557,16 @@ def normalize_table_scores(
     pre_log1p: bool = False,
 ) -> dict:
     """
-    Add normalized [0,1] scores for each specified key via min-max normalisation.
+    Add normalized [0,1] scores for each specified key.
     Modifies the table in place and also returns it.
 
-    When pre_log1p=True, applies log1p to severity values before normalization,
-    compressing extreme outliers (e.g. NaN/Inf-producing faults at raw ~88)
-    so that mantissa-level structure (~0.04-0.2) remains visible in the [0,1]
-    range instead of being flattened to near-zero.
+    Methods:
+      - "minmax":    (x - min) / (max - min)  — standard, compresses range
+      - "max_scale": x / max                   — preserves proportionality
+      - "log1p_max": log1p(x) / max(log1p(x)) — compresses extremes, preserves ratio
+
+    When pre_log1p=True, applies log1p to severity values before normalization
+    (only used with method="minmax" for backward compatibility).
     """
     import math
 
@@ -507,12 +576,40 @@ def normalize_table_scores(
             "flip_1to0_unconditional",
             "sa0_unconditional",
             "sa1_unconditional",
+            "sa0_conditional",
+            "sa1_conditional",
         ]
 
-    # Collect all values across all keys for global normalization.
-    # This ensures cross-fault-type comparability: if all stuck-at values
-    # are negligible next to bit-flip values, they stay near zero instead of
-    # being stretched to [0,1] independently.
+    if method == "log1p_max":
+        # Apply log1p first, then divide by global max — preserves proportions
+        all_log1p = []
+        for entry in table["table"]:
+            for key in score_keys:
+                all_log1p.append(math.log1p(max(entry.get(key, 0), 0)))
+        vmax = max(all_log1p) if all_log1p else 1.0
+
+        for key in score_keys:
+            norm_key = f"{key}_norm"
+            for entry in table["table"]:
+                val = math.log1p(max(entry.get(key, 0), 0))
+                entry[norm_key] = val / vmax if vmax > 1e-12 else 0.0
+        return table
+
+    if method == "max_scale":
+        # Divide by global max — preserves ratios, 0 stays 0
+        all_vals = []
+        for entry in table["table"]:
+            for key in score_keys:
+                all_vals.append(max(entry.get(key, 0), 0))
+        vmax = max(all_vals) if all_vals else 1.0
+
+        for key in score_keys:
+            norm_key = f"{key}_norm"
+            for entry in table["table"]:
+                entry[norm_key] = max(entry.get(key, 0), 0) / vmax if vmax > 1e-12 else 0.0
+        return table
+
+    # Original minmax method
     all_values = []
     for entry in table["table"]:
         for key in score_keys:

@@ -75,10 +75,20 @@ class SingleBit_Fast_SA_FaultInjector:
     # =====================================================================
     # 核心模拟与 Mask 逻辑
     # =====================================================================
+    def _sanitize_output(self, tensor: torch.Tensor) -> torch.Tensor:
+        if tensor.numel() == 0:
+            return tensor
+        return torch.clamp(
+            torch.nan_to_num(tensor, nan=0.0, posinf=1e3, neginf=-1e3),
+            -1e3,
+            1e3,
+        )
+
     def _inject_bit_error(self, tensor: torch.Tensor, mask: torch.Tensor, op: str):
         if tensor.numel() == 0: return tensor
         orig_dtype = tensor.dtype
         tensor_fp32 = tensor.float() if orig_dtype != torch.float32 else tensor
+        tensor_fp32 = self._sanitize_output(tensor_fp32)
         t_int = tensor_fp32.view(torch.int32)
         
         if op == 'stuck_1': t_int = t_int | mask
@@ -86,7 +96,7 @@ class SingleBit_Fast_SA_FaultInjector:
         elif op == 'flip': t_int = t_int ^ mask
         
         out = t_int.view(torch.float32)
-        out = torch.nan_to_num(out, nan=3.4e38, posinf=3.4e38, neginf=-3.4e38)
+        out = self._sanitize_output(out)
         return out.to(orig_dtype)
 
     def _build_pe_mask_map(self, device):
@@ -126,7 +136,7 @@ class SingleBit_Fast_SA_FaultInjector:
         elif self.dataflow == 'IS': Y_faulty = self._simulate_is(X_2d, W, M, K, N, device)
         else: raise ValueError(f"Unknown dataflow: {self.dataflow}")
             
-        Y_faulty = torch.clamp(Y_faulty, -1e3, 1e3)
+        Y_faulty = self._sanitize_output(Y_faulty)
         return Y_faulty.view(original_shape[:-1] + (N,))
 
     def _simulate_ws(self, X, W, M, K, N, device):

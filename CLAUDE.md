@@ -8,6 +8,7 @@ Fault injection framework for studying how hardware faults (bit-flips, stuck-at)
 
 ## Build & run
 
+- On every task, check for relevant Superpowers skills and use them.
 - Package manager: `uv` (workspace with members `tool` and `projects/*`)
 - Install: `uv sync`
 - Run scripts: `uv run python <script.py>`, not bare `python`
@@ -26,9 +27,10 @@ Fault injection framework for studying how hardware faults (bit-flips, stuck-at)
 | `fault_injector_runtimemetrics.py` | `Fast_RuntimeMetrics_SA_FaultInjector` — same as above + records stable rank, SVD entropy, participation ratio, nuclear rank, etc. |
 | `runtime_metrics.py` | `RuntimeMetricsWriter` and `compute_runtime_metrics()` — JSONL-buffered metric logging |
 | `bit_severity.py` | Builds IEEE 754 bit-severity lookup tables (per-bit flip/stuck-at delta stats) for calibrated fault-space reduction |
+| `propagation_injector.py` | `Propagation_SA_FaultInjector` — controls fault propagation degree (p) in WS dataflow for studying spatial error spread |
 | `printlayer.py` | Inspects model layer structure, exports to `config/<model>-config/` |
 
-**`projects/<model>/`** — Per-model experiment scripts. Each follows a similar pattern: load HF model via `trust_remote_code=True`, register fault-injector hooks on specific linear layers, run generation on SQuAD2 samples, save results as JSONL.
+**`projects/<model>/`** — Per-model experiment scripts. Also includes `projects/propagation_study/` (standalone propagation-degree study for WS dataflow). Each follows a similar pattern: load HF model via `trust_remote_code=True`, register fault-injector hooks on specific linear layers, run generation on SQuAD2 samples, save results as JSONL.
 
 **Injector interface**: All injectors expose `hook_fn(module, input_tuple, output_tuple)` suitable for `register_forward_hook`. They simulate the matmul `X @ W` by intercepting the hook, computing a faulty result based on dataflow and fault PE positions, and returning the modified output tensor.
 

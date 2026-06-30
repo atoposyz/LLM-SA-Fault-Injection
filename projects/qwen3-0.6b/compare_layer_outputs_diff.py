@@ -5,34 +5,25 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
-# --- Environment Setup ---
 current_file_path = os.path.abspath(__file__)
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_file_path)))
 tool_src_path = os.path.join(project_root, "tool", "src")
 if tool_src_path not in sys.path:
     sys.path.append(tool_src_path)
 
-from tool.single_bit_injector import SingleBit_Fast_SA_FaultInjector
-
-# Device configuration
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def get_module_by_path(module, path: str):
-    for attr in path.split("."):
-        module = getattr(module, attr)
-    return module
 
 class HiddenCaptureHook:
-    def __init__(self, name):
-        self.name = name
+    def __init__(self):
         self.output = None
 
     def __call__(self, module, input, output):
-        # The output of a layer is usually a tuple (hidden_states, ...)
         if isinstance(output, tuple):
             self.output = output[0].detach().cpu()
         else:
             self.output = output.detach().cpu()
+
 
 def compare_outputs():
     import random
@@ -45,26 +36,15 @@ def compare_outputs():
     model = AutoModelForCausalLM.from_pretrained(model_id, device_map="auto", trust_remote_code=True)
     model.eval()
 
-    # Configuration for Layers
     layer_0 = model.model.layers[0]
-    last_layer_idx = model.config.num_hidden_layers - 1
-    last_layer = model.model.layers[last_layer_idx]
-    
-    # Injection target: Layer 0, K projection
-    injection_target = layer_0.self_attn.k_proj
+    injection_target = layer_0.self_attn.v_proj
 
-    # Initialize Single Bit Injector (Weight Bitflip at pos 28 - Exponent bit)
-    injector = SingleBit_Fast_SA_FaultInjector(
-        sa_rows=256, sa_cols=256, dataflow="WS", 
-        fault_type="weight_bitflip_28", precision='fp32'
-    )
-    injector.init_random_fault()
-    injector.fault_reg[0] = 1 # 1 represents Weight
-    
-    print(f"[INFO] Injecting at Row: {injector.fault_pe_row[0]}, Col: {injector.fault_pe_col[0]}, Bit: {injector.fault_bit[0]}")
+    # --- WS 8x8 PE(2,3), add rand [1,10] at affected positions ---
+    PE_R, PE_C = 8, 8
+    pe_row, pe_col = 2, 3
+    ADD_MIN, ADD_MAX = 1.0, 10.0
+    print(f"[CONFIG] PE {PE_R}x{PE_C} | fault PE({pe_row},{pe_col}) | add rand [{ADD_MIN}, {ADD_MAX}]")
 
-    # Prepare Input
-    # prompt = "Compare the variations in layer outputs after fault injection."
     prompt = """
 Role: You are an expert senior researcher specializing in Computer Architecture, specifically focusing on the intersection of Large Language Models (LLMs) and hardware reliability. Your task is to provide a comprehensive, 5-stage critical review of a hypothetical research paper titled "Characterizing Soft Errors in Systolic Array-based LLM Accelerators: A Layer-wise Fault Injection Study."
 
@@ -95,68 +75,93 @@ Constraints for the Output:
 """
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
 
-    # Hooks for capturing outputs
-    hook_0 = HiddenCaptureHook("Layer 0")
-    hook_last = HiddenCaptureHook(f"Layer {last_layer_idx}")
-    
-    # --- 1. Baseline Pass ---
-    print("[INFO] Running Baseline (No injection)...")
-    handle_0 = layer_0.register_forward_hook(hook_0)
-    handle_last = last_layer.register_forward_hook(hook_last)
-    
+    # --- 1. Baseline ---
+    hook_v = HiddenCaptureHook()
+    print("[INFO] Running Baseline...")
+    h = injection_target.register_forward_hook(hook_v)
     with torch.no_grad():
         model(**inputs)
-    
-    baseline_0 = hook_0.output.clone()
-    baseline_last = hook_last.output.clone()
+    baseline = hook_v.output.clone()
+    h.remove()
 
-    # --- 2. Faulty Pass ---
-    print("[INFO] Running Faulty Pass (Injecting in Layer 0 K-proj)...")
-    # Register fault injector hook
-    handle_inj = injection_target.register_forward_hook(injector.hook_fn)
-    
-    with torch.no_grad():
-        model(**inputs)
-    
-    faulty_0 = hook_0.output.clone()
-    faulty_last = hook_last.output.clone()
-    
-    # Cleanup Hooks
-    handle_0.remove()
-    handle_last.remove()
-    handle_inj.remove()
+    # --- 2. Faulty Passes: OS 3 reg types, add +5 at PE-mapped positions ---
+    MODES = [
+        ('os_input',  'OS Input Register'),
+        ('os_weight', 'OS Weight Register'),
+        ('os_psum',   'OS Psum Register'),
+        ('ws_input',  'WS Input Register'),
+        ('ws_weight', 'WS Weight Register'),
+        ('ws_psum',   'WS Psum Register'),
+    ]
+    results_dir = os.path.join(os.path.dirname(__file__), "comparison_results", "comparison")
+    os.makedirs(results_dir, exist_ok=True)
 
-    # --- 3. Analysis and Comparison ---
-    diff_0 = torch.abs(baseline_0 - faulty_0)
-    diff_last = torch.abs(baseline_last - faulty_last)
+    for mode, label in MODES:
+        print(f"\n[INFO] Faulty Pass: {label} (rand [{ADD_MIN}, {ADD_MAX}])...")
 
-    print("\n--- Difference Statistics ---")
-    print(f"Layer 0   | Max Diff: {diff_0.max().item():.6f} | Mean Diff: {diff_0.mean().item():.6f}")
-    print(f"Last Layer| Max Diff: {diff_last.max().item():.6f} | Mean Diff: {diff_last.mean().item():.6f}")
+        def make_add_hook(mode, r, c):
+            def add_hook(module, inp, out):
+                Y = out[0].clone() if isinstance(out, tuple) else out.clone()
+                M, N = Y.shape[1], Y.shape[2]
+                device = Y.device
+                i_mod = torch.arange(M, device=device) % PE_R
+                j_mod = torch.arange(N, device=device) % PE_C
+                df, reg = mode.split('_')
+                if df == 'os':
+                    if reg == 'input':
+                        mask = (i_mod.unsqueeze(1) == r) & (j_mod.unsqueeze(0) >= c)
+                    elif reg == 'weight':
+                        mask = (i_mod.unsqueeze(1) >= r) & (j_mod.unsqueeze(0) == c)
+                    elif reg == 'psum':
+                        mask = (i_mod.unsqueeze(1) == r) & (j_mod.unsqueeze(0) == c)
+                elif df == 'ws':
+                    if reg == 'input':
+                        mask = j_mod.unsqueeze(0) >= c
+                    elif reg == 'weight':
+                        mask = j_mod.unsqueeze(0) == c
+                    elif reg == 'psum':
+                        mask = j_mod.unsqueeze(0) == c
+                rand_vals = ADD_MIN + (ADD_MAX - ADD_MIN) * torch.rand(M, N, device=device)
+                Y = Y + (mask * rand_vals).to(Y.dtype)
+                return Y
+            return add_hook
 
-    # --- 4. Plotting Heatmaps ---
-    os.makedirs("results/comparison", exist_ok=True)
-    
-    fig, axes = plt.subplots(1, 2, figsize=(20, 8))
-    
-    # Layer 0 Heatmap
-    sns.heatmap(diff_0[0].float().numpy(), ax=axes[0], cmap="YlOrRd")
-    axes[0].set_title(f"Layer 0 Output Difference\n(Injected at Layer 0 K-proj)")
-    axes[0].set_xlabel("Hidden Dimension")
-    axes[0].set_ylabel("Token Index")
+        handle_inj = injection_target.register_forward_hook(make_add_hook(mode, pe_row, pe_col))
+        handle_cap = injection_target.register_forward_hook(hook_v)
 
-    # Last Layer Heatmap
-    sns.heatmap(diff_last[0].float().numpy(), ax=axes[1], cmap="YlOrRd")
-    axes[1].set_title(f"Last Layer Output Difference\n(Error propagated from Layer 0)")
-    axes[1].set_xlabel("Hidden Dimension")
-    axes[1].set_ylabel("Token Index")
+        with torch.no_grad():
+            model(**inputs)
 
-    plt.tight_layout()
-    output_img = "results/comparison/layer_diff_comparison.png"
-    plt.savefig(output_img)
-    plt.close()
-    
-    print(f"\n[SUCCESS] Comparative heatmap saved to: {output_img}")
+        faulty = hook_v.output.clone()
+        handle_inj.remove()
+        handle_cap.remove()
+
+        diff = torch.abs(baseline - faulty)
+        print(f"  Max Diff: {diff.max().item():.2f}  Mean Diff: {diff.mean().item():.4f}")
+
+        # Top-left 32x32 raw diff
+        raw = diff[0, :32, :32]
+        print(f"  Top-left 32x32 ({label}):")
+        print("    " + "".join(f"{j:4d}" for j in range(32)))
+        for r in range(32):
+            row_vals = " ".join(f"{raw[r,j].item():4.0f}" for j in range(32))
+            print(f"  {r:2d}: {row_vals}")
+
+        # PE schematic heatmap (log scale)
+        crop = torch.log1p(raw)
+        fig, ax = plt.subplots(1, 1, figsize=(6, 6))
+        sns.heatmap(crop.float().numpy(), ax=ax, cmap="Reds",
+                    linewidths=0.5, linecolor='#f0f0f0', square=True,
+                    cbar=False, xticklabels=False, yticklabels=False)
+        plt.tight_layout(pad=0)
+        img_png = os.path.join(results_dir, f"{mode}_add1-10.png")
+        img_pdf = os.path.join(results_dir, f"{mode}_add1-10.pdf")
+        plt.savefig(img_png, dpi=600)
+        plt.savefig(img_pdf)
+        plt.close()
+        print(f"  [SAVED] {img_png}")
+        print(f"  [SAVED] {img_pdf}")
+
 
 if __name__ == "__main__":
     compare_outputs()

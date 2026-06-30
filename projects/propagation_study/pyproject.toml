@@ -1,0 +1,6 @@
+[project]
+name = "propagation-study"
+version = "0.1.0"
+description = "Propagation degree study — WS dataflow fault spread analysis"
+requires-python = ">=3.12"
+dependencies = []

@@ -14,4 +14,11 @@ projects/*/result/
 
 ~/
 
+result/
 results/
+
+slurm_logs/
+
+# Large severity table files (>100MB, exceed GitHub limit)
+projects/*/config/joint_severity_*.json
+projects/*/v5_severity/joint_severity_*.json

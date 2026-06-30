@@ -250,11 +250,11 @@ Constraints for the Output:
         ax.spines['right'].set_visible(False)
 
     plt.tight_layout()
-    proj_output = "results/k_matrix_comparison/fault_projections_analysis.png"
+    proj_output = "/workplace/home/mayongzhe/faultinject/projects/qwen3-0.6b/comparison_results/k_matrix_comparison/fault_projections_analysis.png"
     plt.savefig(proj_output, dpi=300, bbox_inches='tight')
     plt.close()
     
-    print(f"\n[SUCCESS] Heatmaps saved to: results/k_matrix_comparison/k_matrix_comparison_heatmaps.png")
+    print(f"\n[SUCCESS] Heatmaps saved to: /workplace/home/mayongzhe/faultinject/projects/qwen3-0.6b/comparison_results/k_matrix_comparison/k_matrix_comparison_heatmaps.png")
     print(f"[SUCCESS] Projection analysis plot saved to: {proj_output}")
 
     # ---------------------------------------------------------

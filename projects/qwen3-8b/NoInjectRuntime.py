@@ -135,8 +135,8 @@ if __name__ == "__main__":
         help="指定采样样本ID"
     )
     parser.add_argument(
-        "--metricInterval", type=int, default=20,
-        help="运行时指标采样间隔，默认20"
+        "--metricInterval", type=int, default=50,
+        help="运行时指标采样间隔，默认50"
     )
     parser.add_argument(
         "--metricOutput", type=str,
@@ -161,7 +161,7 @@ if __name__ == "__main__":
         "openai/gsm8k", "main", split="train", use_cache_first=use_cache
     )
     random.seed(37)
-    samples = random.sample(list(ds), 200)
+    samples = random.sample(list(ds), 1000)
 
     if sample_index:
         samples = [samples[i] for i in sample_index]
@@ -229,7 +229,7 @@ if __name__ == "__main__":
             with torch.no_grad():
                 outputs = model.generate(
                     **inputs,
-                    max_new_tokens=2000,
+                    max_new_tokens=5000,
                     do_sample=False,
                     top_p=0.95,
                     temperature=0,

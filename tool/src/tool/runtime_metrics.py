@@ -84,7 +84,7 @@ def compute_runtime_metrics(tensor: torch.Tensor):
     top5_energy_ratio = top5_energy / frobenius_norm_sq if frobenius_norm_sq > 0.0 else 0.0
 
     sigma_max = float(singular_values.max().item()) if singular_values.numel() > 0 else 0.0
-    tol = max(rows, cols) * torch.finfo(torch.float32).eps * sigma_max
+    tol = 0.01 * sigma_max
     numerical_rank = int((singular_values > tol).sum().item()) if sigma_max > 0.0 else 0
 
     nuclear_norm = float(singular_values.sum().item())

@@ -33,6 +33,7 @@ from transformers import AutoTokenizer, AutoModel, logging as hf_logging
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../tool/src"))
 from tool.bit_severity import (
+    apply_theoretical_floor,
     build_severity_lookup_table,
     normalize_table_scores,
     save_lookup_table,
@@ -391,7 +392,8 @@ def build_and_save(
         clip_value=clip_value,
         max_elements=max_elements,
     )
-    table = normalize_table_scores(table, pre_log1p=True)
+    table = apply_theoretical_floor(table)
+    table = normalize_table_scores(table, method="log1p_max")
     table["metadata"] = metadata
 
     os.makedirs(output_dir, exist_ok=True)
