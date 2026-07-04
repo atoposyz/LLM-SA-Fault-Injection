@@ -19,15 +19,14 @@ results/
 
 slurm_logs/
 
-# Large severity table files (>100MB, exceed GitHub limit)
-projects/*/tables/joint_severity_*.json
-projects/*/v5_severity/joint_severity_*.json
+# Generated image outputs
+*.png
+*.pdf
+*.svg
 
-# Generated severity outputs (tables, plots)
-projects/severity/tables/
-projects/severity/comparison_results/
-projects/severity/v5_severity/*.png
-projects/severity/v5_severity/*.pdf
+# Generated JSON/JSONL outputs
+*.json
+*.jsonl
 
 # API keys
 api_key.py
