@@ -150,7 +150,7 @@ def main():
 
     data = build_all_coverage(R, C)
 
-    output_dir = os.path.join(os.path.dirname(__file__), "config")
+    output_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "tables")
     os.makedirs(output_dir, exist_ok=True)
     out_path = os.path.join(output_dir, "position_severity_ws.json")
 

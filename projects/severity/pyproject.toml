@@ -1,0 +1,7 @@
+[project]
+name = "severity"
+version = "0.1.0"
+description = "Bit-severity and joint-severity table construction and analysis"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []

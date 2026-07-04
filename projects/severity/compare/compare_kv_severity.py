@@ -8,14 +8,14 @@ import matplotlib.ticker as mticker
 import numpy as np
 from transformers import AutoModel, AutoTokenizer, logging as hf_logging
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../tool/src"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../tool/src"))
 from tool.bit_severity import build_severity_lookup_table, normalize_table_scores
 
 hf_logging.set_verbosity_error()
 os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
 
 MODEL = "boltuix/bert-emotion"
-OUT = "projects/bert/config/severity_kv_comparison.png"
+OUT = "projects/severity/tables/severity_kv_comparison.png"
 
 def build_table(tensors, label):
     t = build_severity_lookup_table(tensors, source_name=label, precision="fp32",

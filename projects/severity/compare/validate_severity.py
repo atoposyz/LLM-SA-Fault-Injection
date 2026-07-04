@@ -6,9 +6,9 @@ joint severity predictions by (type, bit, pe_row, pe_col), and computes
 ranking metrics (Spearman rho, Kendall tau, Top-K overlap, high-risk recall).
 
 Usage:
-  uv run python projects/bert/validate_severity.py \
+  uv run python projects/severity/validate_severity.py \
     --ground-truth projects/bert/result/combined_top1_position_long.csv \
-    --joint-severity projects/bert/config/joint_severity_stuck1_ws.json
+    --joint-severity projects/severity/tables/joint_severity_stuck1_ws.json
 
 The script works without PyTorch — only numpy and scipy are needed for metrics.
 """
@@ -136,12 +136,12 @@ def main():
     )
     parser.add_argument(
         "--ground-truth", type=str,
-        default=os.path.join(os.path.dirname(__file__), "result", "combined_top1_position_long.csv"),
+        default=os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "bert", "result", "combined_top1_position_long.csv"),
         help="Path to combined_top1_position_long.csv"
     )
     parser.add_argument(
         "--joint-severity", type=str,
-        default=os.path.join(os.path.dirname(__file__), "config", "joint_severity_stuck1_ws.json"),
+        default=os.path.join(os.path.dirname(os.path.dirname(__file__)), "tables", "joint_severity_stuck1_ws.json"),
         help="Path to joint severity JSON"
     )
     parser.add_argument(
@@ -166,7 +166,7 @@ def main():
     gt = load_ground_truth(args.ground_truth)
     joint = load_joint_severity(args.joint_severity)
     pos_cov_agg = load_position_coverage_aggregated(
-        os.path.join(os.path.dirname(__file__), "config", "position_severity_ws.json"),
+        os.path.join(os.path.dirname(os.path.dirname(__file__)), "tables", "position_severity_ws.json"),
         ["attention", "intermediate", "output"],
     )
 

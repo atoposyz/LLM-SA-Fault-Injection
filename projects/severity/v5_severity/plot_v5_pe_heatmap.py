@@ -17,7 +17,7 @@ from scipy.stats import spearmanr
 matplotlib.use("Agg")
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-RESULT_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "result")
+RESULT_DIR = os.path.join(SCRIPT_DIR, "..", "..", "bert", "result")
 
 BITS = list(range(23, 31))
 COLS = list(range(32))

@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 
-DEFAULT_API_KEY = "sk-4150da41c4b043da8a509174c8af2309"
+from api_key import DEFAULT_API_KEY
 
 
 def is_garbled(text: str) -> bool:
@@ -61,6 +61,11 @@ def get_generated_text(sample: dict) -> str:
 
 def threshold_from_name(name: str) -> str:
     match = re.search(r"sr<=([0-9.]+)_cons", name)
+    return match.group(1) if match else "unknown"
+
+
+def extract_upper_threshold(name: str) -> str:
+    match = re.search(r"upper_sr>=([0-9.]+)", name)
     return match.group(1) if match else "unknown"
 
 
@@ -291,6 +296,19 @@ class LLMDetector:
                 return json.loads(extracted)
             except json.JSONDecodeError:
                 pass
+        # Last resort: try to salvage by escaping invalid backslash sequences
+        try:
+            fixed = re.sub(r'\\(?!["\\/bfnrtu])', r"\\\\", text)
+            return json.loads(fixed)
+        except json.JSONDecodeError:
+            pass
+        extracted2 = LLMDetector._extract_json(text)
+        if extracted2:
+            try:
+                fixed2 = re.sub(r'\\(?!["\\/bfnrtu])', r"\\\\", extracted2)
+                return json.loads(fixed2)
+            except json.JSONDecodeError:
+                pass
         print(f"ERROR: LLM response is not JSON. Content (first 500): {content[:500]}", file=sys.stderr)
         raise ValueError(f"LLM response is not JSON: {content[:500]}")
 
@@ -472,6 +490,23 @@ def cmd_build_oracle(args) -> None:
     if args.limit is not None:
         all_sids = all_sids[: args.limit]
 
+    saskip = getattr(args, "saskip", False)
+
+    def get_threshold(fname: str) -> str:
+        if saskip:
+            return extract_upper_threshold(fname)
+        return threshold_from_name(fname)
+
+    def get_oracle_id(fpath: str, sid: str) -> str:
+        if saskip:
+            return f"{extract_upper_threshold(Path(fpath).name)}::{sid}"
+        return oracle_id(fpath, sid)
+
+    def get_actually_rerun(recs: list[dict], first: dict) -> bool:
+        if saskip:
+            return bool(first.get("is_aborted", False))
+        return len(recs) > 1
+
     # Build pending work items: list of (sample_id, items_list)
     pending = []
     for sid in all_sids:
@@ -480,18 +515,18 @@ def cmd_build_oracle(args) -> None:
             records = all_records[path]
             if sid not in records:
                 continue
-            oid = oracle_id(path, sid)
+            oid = get_oracle_id(path, sid)
             if oid in done:
                 continue
             first = records[sid][0]
             items.append({
                 "oracle_id": oid,
                 "file": Path(path).name,
-                "threshold": threshold_from_name(Path(path).name),
+                "threshold": get_threshold(Path(path).name),
                 "sample_id": sid,
                 "token_length": first.get("token_length", 0),
                 "text": get_generated_text(first),
-                "actually_rerun": len(records[sid]) > 1,
+                "actually_rerun": get_actually_rerun(records[sid], first),
             })
         if items:
             pending.append((sid, items))
@@ -523,33 +558,63 @@ def cmd_build_oracle(args) -> None:
 
     all_rows = []
     written = 0
+    oracle_tmp = args.oracle + ".tmp"
+
+    # Clear temp file
+    Path(oracle_tmp).parent.mkdir(parents=True, exist_ok=True)
+
+    def write_rows(rows):
+        nonlocal written
+        with open(oracle_tmp, "a", encoding="utf-8") as out:
+            for row in rows:
+                out.write(json.dumps(row, ensure_ascii=False) + "\n")
+        written += len(rows)
+
     if concurrency <= 1:
         for sid, items in pending:
             _, rows = process_sample(sid, items)
             all_rows.extend(rows)
-            written += len(rows)
-            print(f"labeled sample_id={sid} items={len(items)} total_written={written}")
+            write_rows(rows)
+            print(f"labeled sample_id={sid} items={len(items)} total_written={written}", flush=True)
     else:
+        import threading
+        _write_lock = threading.Lock()
+        def write_rows_threadsafe(rows):
+            nonlocal written
+            with _write_lock:
+                with open(oracle_tmp, "a", encoding="utf-8") as out:
+                    for row in rows:
+                        out.write(json.dumps(row, ensure_ascii=False) + "\n")
+                written += len(rows)
+
         with ThreadPoolExecutor(max_workers=concurrency) as executor:
             futures = {executor.submit(process_sample, sid, items): sid for sid, items in pending}
             for future in as_completed(futures):
                 sid, rows = future.result()
                 all_rows.extend(rows)
-                written += len(rows)
-                print(f"labeled sample_id={sid} items={len(rows)} total_written={written}")
+                write_rows_threadsafe(rows)
+                print(f"labeled sample_id={sid} items={len(rows)} total_written={written}", flush=True)
 
     # Merge with previously existing oracle entries (preserve old + new)
     existing_rows = _load_oracle_rows(args.oracle) if Path(args.oracle).exists() else []
     existing_by_oid = {r["oracle_id"]: r for r in existing_rows}
     for row in all_rows:
         existing_by_oid[row["oracle_id"]] = row
+    # Also load from tmp (for crash recovery)
+    if Path(oracle_tmp).exists():
+        tmp_rows = _load_oracle_rows(oracle_tmp)
+        for r in tmp_rows:
+            existing_by_oid[r["oracle_id"]] = r
     merged = sorted(existing_by_oid.values(), key=lambda r: (int(r["sample_id"]), float(r["threshold"])))
 
     with open(args.oracle, "w", encoding="utf-8") as out:
         for row in merged:
             out.write(json.dumps(row, ensure_ascii=False) + "\n")
 
-    print(f"oracle written: {args.oracle}; total labels={len(merged)} (new={len(all_rows)})")
+    # Clean up temp file
+    Path(oracle_tmp).unlink(missing_ok=True)
+
+    print(f"oracle written: {args.oracle}; total labels={len(merged)} (new={len(all_rows)})", flush=True)
 
 
 def cmd_eval_with_oracle(args) -> None:
@@ -582,8 +647,246 @@ def add_llm_args(parser):
     parser.add_argument("--max-chars", type=int, default=12000, help="Max chars per generated output sent to LLM")
 
 
+def print_analyze_summary(rows: list[dict]) -> None:
+    """Print a formatted summary table for analyzed SAskip results."""
+    if not rows:
+        print("No data.")
+        return
+
+    # Group by file (upper threshold)
+    from collections import OrderedDict
+    by_file = OrderedDict()
+    for r in rows:
+        by_file.setdefault(r["file"], []).append(r)
+
+    # Per-file header
+    print("\n" + "=" * 100)
+    print("  SAskip Fault Injection — Garbled Output Analysis")
+    print("=" * 100)
+
+    # Cross-file comparison table
+    header = (
+        f"{'Upper SR':>10s}  {'Total':>6s}  {'Garbled':>8s}  {'Rate':>7s}  "
+        f"{'Aborted':>8s}  {'TP':>5s}  {'FP':>5s}  {'TN':>5s}  {'FN':>5s}  "
+        f"{'Recall':>7s}  {'Precision':>10s}  "
+        f"{'LowerAbort':>11s}  {'UpperAbort':>11s}  {'NoAbort':>8s}"
+    )
+    print(header)
+    print("-" * 100)
+
+    for fname, items in by_file.items():
+        thr = extract_upper_threshold(fname)
+        total = len(items)
+        garbled = sum(1 for r in items if r["is_garbled"])
+        aborted = sum(1 for r in items if r["is_aborted"])
+        tp = sum(1 for r in items if r["is_garbled"] and r["is_aborted"])
+        fp = sum(1 for r in items if not r["is_garbled"] and r["is_aborted"])
+        tn = sum(1 for r in items if not r["is_garbled"] and not r["is_aborted"])
+        fn = sum(1 for r in items if r["is_garbled"] and not r["is_aborted"])
+        garbled_rate = garbled / total * 100 if total else 0
+        recall = tp / (tp + fn) * 100 if (tp + fn) else 0
+        precision = tp / (tp + fp) * 100 if (tp + fp) else 0
+
+        # Breakdown by triggered_detector
+        lower_abort = sum(1 for r in items if r["triggered_detector"] == "lower")
+        upper_abort = sum(1 for r in items if r["triggered_detector"] == "upper")
+        no_abort = sum(1 for r in items if r["triggered_detector"] == "")
+
+        print(
+            f"{thr:>10s}  {total:>6d}  {garbled:>8d}  {garbled_rate:>6.1f}%  "
+            f"{aborted:>8d}  {tp:>5d}  {fp:>5d}  {tn:>5d}  {fn:>5d}  "
+            f"{recall:>6.1f}%  {precision:>9.1f}%  "
+            f"{lower_abort:>11d}  {upper_abort:>11d}  {no_abort:>8d}"
+        )
+
+    print("-" * 100)
+
+    # Per-threshold breakdown: garbled rate within each triggered_detector group
+    print("\n  Garbled rate by triggered_detector:")
+    print(f"  {'Upper SR':>10s}  {'Detector':>10s}  {'Count':>6s}  {'Garbled':>8s}  {'Rate':>7s}  {'Aborted%':>8s}")
+    print("  " + "-" * 65)
+    for fname, items in by_file.items():
+        thr = extract_upper_threshold(fname)
+        for det in ("lower", "upper", ""):
+            group = [r for r in items if r["triggered_detector"] == det]
+            if not group:
+                continue
+            cnt = len(group)
+            garb = sum(1 for r in group if r["is_garbled"])
+            rate = garb / cnt * 100 if cnt else 0
+            abort_in_group = sum(1 for r in group if r["is_aborted"])
+            abort_rate = abort_in_group / cnt * 100 if cnt else 0
+            label = det if det else "(none)"
+            print(f"  {thr:>10s}  {label:>10s}  {cnt:>6d}  {garb:>8d}  {rate:>6.1f}%  {abort_rate:>7.1f}%")
+
+    # Global totals
+    total_all = len(rows)
+    garbled_all = sum(1 for r in rows if r["is_garbled"])
+    aborted_all = sum(1 for r in rows if r["is_aborted"])
+    tp_all = sum(1 for r in rows if r["is_garbled"] and r["is_aborted"])
+    fp_all = sum(1 for r in rows if not r["is_garbled"] and r["is_aborted"])
+    tn_all = sum(1 for r in rows if not r["is_garbled"] and not r["is_aborted"])
+    fn_all = sum(1 for r in rows if r["is_garbled"] and not r["is_aborted"])
+    print(f"\n  ALL FILES: total={total_all} garbled={garbled_all} ({garbled_all/total_all*100:.1f}%)  "
+          f"aborted={aborted_all}  TP={tp_all} FP={fp_all} TN={tn_all} FN={fn_all}  "
+          f"recall={tp_all/(tp_all+fn_all)*100:.1f}%  precision={tp_all/(tp_all+fp_all)*100:.1f}%"
+          if (tp_all + fp_all) else "")
+
+
+def cmd_analyze(args) -> None:
+    """Analyze SAskip result files: garbled detection vs abort mechanism."""
+    files = sorted(args.inputs)
+    use_llm = getattr(args, "detector", "rule") == "llm"
+
+    # First pass: load all raw records
+    raw_by_file = {}
+    for fpath in files:
+        fname = Path(fpath).name
+        recs = []
+        with open(fpath, "r", encoding="utf-8") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                recs.append(json.loads(line))
+        raw_by_file[fname] = recs
+
+    # Resolve garbled labels
+    if use_llm:
+        detector = LLMDetector(
+            cache_path=args.cache, model=args.model,
+            base_url=args.base_url, max_chars=args.max_chars,
+        )
+        # Deduplicate by text fingerprint across all files
+        text_to_fp = {}
+        fp_results = {}
+        for fname, recs in raw_by_file.items():
+            for obj in recs:
+                text = get_generated_text(obj)
+                fp = text_fingerprint(text)
+                text_to_fp[(fname, str(obj["sample_id"]))] = fp
+                if fp not in fp_results:
+                    fp_results[fp] = None  # placeholder
+
+        # Build batch items for unique fingerprints (sorted by sample_id)
+        fp_pairs = []
+        for fp in fp_results:
+            for fname, recs in raw_by_file.items():
+                found = False
+                for obj in recs:
+                    t = get_generated_text(obj)
+                    if text_fingerprint(t) == fp:
+                        fp_pairs.append((fp, fname, obj, t))
+                        found = True
+                        break
+                if found:
+                    break
+        fp_pairs.sort(key=lambda x: int(x[2]["sample_id"]))
+
+        # Apply limit / sample range filters
+        sample_start = getattr(args, "sample_start", None)
+        sample_end = getattr(args, "sample_end", None)
+        limit = getattr(args, "limit", None)
+        if sample_start is not None:
+            fp_pairs = [p for p in fp_pairs if int(p[2]["sample_id"]) >= sample_start]
+        if sample_end is not None:
+            fp_pairs = [p for p in fp_pairs if int(p[2]["sample_id"]) <= sample_end]
+        if limit is not None:
+            fp_pairs = fp_pairs[:limit]
+
+        unique_items = []
+        fp_to_item_idx = {}
+        for fp, fname, obj, t in fp_pairs:
+            idx = len(unique_items)
+            unique_items.append({
+                "oracle_id": fp,
+                "threshold": extract_upper_threshold(fname),
+                "sample_id": obj["sample_id"],
+                "token_length": obj.get("token_length", 0),
+                "text": t,
+            })
+            fp_to_item_idx[fp] = idx
+
+        print(f"LLM detection: {len(unique_items)} unique texts across {len(files)} files")
+
+        # Chunked batch detection (avoids context overflow)
+        BATCH_CHUNK = 30
+        results = [None] * len(unique_items)
+        for chunk_start in range(0, len(unique_items), BATCH_CHUNK):
+            chunk = unique_items[chunk_start:chunk_start + BATCH_CHUNK]
+            chunk_results = detector.detect_batch(chunk)
+            for i, r in enumerate(chunk_results):
+                results[chunk_start + i] = r
+            print(f"  chunk [{chunk_start}:{chunk_start+len(chunk)}] done")
+
+        for fp, idx in fp_to_item_idx.items():
+            fp_results[fp] = results[idx]
+
+        def get_garbled(fname, sid, obj):
+            fp = text_to_fp[(fname, sid)]
+            r = fp_results.get(fp)
+            if r is None:
+                return False, {"reason": "not_in_sample_range", "confidence": 0.0, "detector": "llm_skipped"}
+            return r["should_rerun"], r
+    else:
+        def get_garbled(fname, sid, obj):
+            garbled = is_garbled(get_generated_text(obj))
+            return garbled, {"reason": "rule_garbled" if garbled else "rule_ok", "confidence": 1.0, "detector": "rule"}
+
+    # Build all_rows with labels
+    all_rows = []
+    for fname, recs in raw_by_file.items():
+        for obj in recs:
+            sid = str(obj.get("sample_id", ""))
+            garbled, result = get_garbled(fname, sid, obj)
+            all_rows.append({
+                "file": fname,
+                "sample_id": sid,
+                "token_length": obj.get("token_length", 0),
+                "is_garbled": garbled,
+                "is_aborted": bool(obj.get("is_aborted", False)),
+                "should_aborted": bool(obj.get("should_aborted", False)),
+                "triggered_detector": obj.get("triggered_detector", ""),
+                "fault_type": obj.get("fault_type", ""),
+                "inject_layer": obj.get("inject_layer", ""),
+                "inject_kernel": obj.get("inject_kernel", ""),
+                "fault_pe_row": obj.get("fault_pe_row", ""),
+                "fault_pe_col": obj.get("fault_pe_col", ""),
+                "elapsed_time": obj.get("elapsed_time", 0),
+                "dataflow": obj.get("dataflow", ""),
+                "reason": result.get("reason", ""),
+                "confidence": result.get("confidence", 0.0),
+                "detector": result.get("detector", "rule"),
+            })
+
+    print(f"Detector: {'LLM (' + args.model + ')' if use_llm else 'rule-based'}")
+    print_analyze_summary(all_rows)
+
+    # Output detailed JSONL if requested
+    if args.output:
+        with open(args.output, "w", encoding="utf-8") as out:
+            for r in all_rows:
+                out.write(json.dumps(r, ensure_ascii=False) + "\n")
+        print(f"\n  Detailed results written to: {args.output}")
+
+    # Output missed (garbled but not aborted)
+    if args.missed_output:
+        missed = [r for r in all_rows if r["is_garbled"] and not r["is_aborted"]]
+        with open(args.missed_output, "w", encoding="utf-8") as out:
+            for r in missed:
+                out.write(json.dumps(r, ensure_ascii=False) + "\n")
+        print(f"  Missed detections written to: {args.missed_output}  (count={len(missed)})")
+
+    # Output false alarms (aborted but not garbled)
+    if args.false_output:
+        false_alarms = [r for r in all_rows if not r["is_garbled"] and r["is_aborted"]]
+        with open(args.false_output, "w", encoding="utf-8") as out:
+            for r in false_alarms:
+                out.write(json.dumps(r, ensure_ascii=False) + "\n")
+        print(f"  False alarms written to: {args.false_output}  (count={len(false_alarms)})")
+
+
 def main():
-    commands = {"eval", "build-oracle", "eval-with-oracle"}
+    commands = {"eval", "build-oracle", "eval-with-oracle", "analyze"}
     if len(sys.argv) > 1 and sys.argv[1] not in commands and sys.argv[1] not in {"-h", "--help"}:
         sys.argv.insert(1, "eval")
     parser = argparse.ArgumentParser(description="Detect corrupted model outputs and evaluate ReRun accuracy.")
@@ -605,6 +908,7 @@ def main():
     build_p.add_argument("--sample-end", type=int, default=None)
     build_p.add_argument("--limit", type=int, default=None, help="Limit number of sample_ids for testing")
     build_p.add_argument("--concurrency", "-c", type=int, default=1, help="Number of concurrent batch API calls")
+    build_p.add_argument("--saskip", action="store_true", help="SAskip mode: upper_sr as threshold, is_aborted as actually_rerun")
     add_llm_args(build_p)
     build_p.set_defaults(func=cmd_build_oracle)
 
@@ -612,6 +916,19 @@ def main():
     oracle_p.add_argument("inputs", nargs="+", help="Result JSONL files")
     oracle_p.add_argument("--oracle", required=True, help="Oracle JSONL path")
     oracle_p.set_defaults(func=cmd_eval_with_oracle)
+
+    analyze_p = sub.add_parser("analyze", help="Analyze SAskip result files: garbled rate vs abort accuracy")
+    analyze_p.add_argument("inputs", nargs="+", help="SAskip result JSONL files")
+    analyze_p.add_argument("--output", "-o", default=None, help="Output path for detailed results JSONL")
+    analyze_p.add_argument("--missed-output", default=None, help="Output path for missed detections (garbled but not aborted)")
+    analyze_p.add_argument("--false-output", default=None, help="Output path for false alarms (aborted but not garbled)")
+    analyze_p.add_argument("--detector", choices=["rule", "llm"], default="rule", help="Detector backend (default: rule)")
+    analyze_p.add_argument("--cache", default=None, help="JSONL cache for LLM decisions")
+    analyze_p.add_argument("--sample-start", type=int, default=None)
+    analyze_p.add_argument("--sample-end", type=int, default=None)
+    analyze_p.add_argument("--limit", type=int, default=None, help="Limit number of unique sample_ids for LLM detection")
+    add_llm_args(analyze_p)
+    analyze_p.set_defaults(func=cmd_analyze)
 
     # Backward-compatible default: detect_garbled.py <input> [options]
     parser.add_argument("legacy_input", nargs="?", help=argparse.SUPPRESS)

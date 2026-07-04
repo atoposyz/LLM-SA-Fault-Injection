@@ -9,7 +9,7 @@ import matplotlib.ticker as mticker
 import numpy as np
 from transformers import AutoModel, AutoTokenizer, logging as hf_logging
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../tool/src"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../tool/src"))
 from tool.bit_severity import build_severity_lookup_table, normalize_table_scores
 
 hf_logging.set_verbosity_error()
@@ -210,5 +210,5 @@ for op_suffix, op_label in [(".key", "K Projection"), (".value", "V Projection")
     ta_out = build_table(a_out, f"{op_label}_psum")
 
     tables = {"weight": tw, "activation_input": ta_in, "psum_output": ta_out}
-    out_file = f"projects/bert/config/severity_{op_suffix.strip('.')}_fp32.png"
+    out_file = f"projects/severity/tables/severity_{op_suffix.strip('.')}_fp32.png"
     plot_one_operator(tables, op_label, out_file)

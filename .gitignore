@@ -1,8 +1,8 @@
 # Python-generated files
 __pycache__/
 *.py[oc]
-build/
-dist/
+/build/
+/dist/
 wheels/
 *.egg-info
 
@@ -20,5 +20,14 @@ results/
 slurm_logs/
 
 # Large severity table files (>100MB, exceed GitHub limit)
-projects/*/config/joint_severity_*.json
+projects/*/tables/joint_severity_*.json
 projects/*/v5_severity/joint_severity_*.json
+
+# Generated severity outputs (tables, plots)
+projects/severity/tables/
+projects/severity/comparison_results/
+projects/severity/v5_severity/*.png
+projects/severity/v5_severity/*.pdf
+
+# API keys
+api_key.py

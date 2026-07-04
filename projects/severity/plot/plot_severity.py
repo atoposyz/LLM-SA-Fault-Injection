@@ -10,9 +10,9 @@ import matplotlib.ticker as mticker
 import numpy as np
 
 TABLES = {
-    "weight":      "projects/bert/config/severity_table_weight_fp32.json",
-    "activation":  "projects/bert/config/severity_table_activation_input_fp32.json",
-    "psum":        "projects/bert/config/severity_table_psum_output_fp32.json",
+    "weight":      "projects/severity/tables/severity_table_weight_fp32.json",
+    "activation":  "projects/severity/tables/severity_table_activation_input_fp32.json",
+    "psum":        "projects/severity/tables/severity_table_psum_output_fp32.json",
 }
 
 COLORS = {
@@ -111,7 +111,7 @@ def plot():
     )
 
     plt.tight_layout(rect=[0, 0, 1, 0.94])
-    out_path = "projects/bert/config/severity_stuckat_comparison.png"
+    out_path = "projects/severity/tables/severity_stuckat_comparison.png"
     plt.savefig(out_path, dpi=150, bbox_inches='tight', facecolor='white')
     print(f"Saved: {out_path}")
     plt.close()

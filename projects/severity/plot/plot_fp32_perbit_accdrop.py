@@ -5,7 +5,7 @@ Two subplots (SA0 / SA1), each with input and weight as separate lines.
 Data: result_fp32/accuracy_drop_perbit_{type}_stuck_{value}.csv
 
 Usage:
-  uv run python projects/bert/plot_fp32_perbit_accdrop.py
+  uv run python projects/severity/plot_fp32_perbit_accdrop.py
 """
 
 import csv
@@ -18,20 +18,20 @@ import matplotlib.ticker as mticker
 import numpy as np
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_DIR = os.path.join(SCRIPT_DIR, "comparison_results")
+OUTPUT_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "comparison_results")
 
 MODEL_SPECS = {
     "bert": {
         "label": "BERT",
         "color": "#d55e00",
-        "data_dir": os.path.join(SCRIPT_DIR, "result_fp32"),
+        "data_dir": os.path.join(SCRIPT_DIR, "..", "..", "bert", "result_fp32"),
         "template": "accuracy_drop_perbit_{typ}_stuck_{sv}.csv",
         "drop_col": "acc_drop",
     },
     "qwen3-8b": {
         "label": "Qwen3-8B",
         "color": "#0072b2",
-        "data_dir": os.path.join(os.path.dirname(SCRIPT_DIR), "qwen3-8b", "result"),
+        "data_dir": os.path.join(os.path.dirname(os.path.dirname(SCRIPT_DIR)), "qwen3-8b", "result"),
         "template": "accuracy_drop_plot_form_{typ}_stuck_{sv}.csv",
         "drop_col": "accuracy_drop",
     },

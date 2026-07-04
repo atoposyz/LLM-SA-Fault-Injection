@@ -12,7 +12,7 @@ Outputs:
   - sorted by joint severity for downstream representative sampling
 
 Usage:
-  uv run python projects/bert/build_joint_severity.py \
+  uv run python projects/severity/build_joint_severity.py \
     --fault-type stuck-at --stuck-value 1
 
 The script expects grouped severity tables and position coverage to exist.
@@ -28,7 +28,7 @@ from collections import defaultdict
 import numpy as np
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_DIR = os.path.join(SCRIPT_DIR, "config")
+TABLES_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "tables")
 
 # Per-type severity field mapping
 # field template uses {} placeholder for stuck_value (0 or 1)
@@ -73,11 +73,11 @@ OPERATOR_GROUPS = ["attention", "intermediate", "output"]
 
 
 def _table_filename(source: str, operator: str) -> str:
-    return os.path.join(CONFIG_DIR, f"severity_table_{source}_fp32_{operator}.json")
+    return os.path.join(TABLES_DIR, f"severity_table_{source}_fp32_{operator}.json")
 
 
 def _position_filename() -> str:
-    return os.path.join(CONFIG_DIR, "position_severity_ws.json")
+    return os.path.join(TABLES_DIR, "position_severity_ws.json")
 
 
 def load_bit_severity(exp_type: str, operator: str, bit: int, stuck_value: int = 1) -> float:
@@ -95,7 +95,7 @@ def load_bit_severity(exp_type: str, operator: str, bit: int, stuck_value: int =
     if not os.path.exists(path):
         raise FileNotFoundError(
             f"Missing severity table: {path}\n"
-            f"Run: uv run python projects/bert/build_severity_table.py "
+            f"Run: uv run python projects/severity/build_severity_table.py "
             f"--source both --modules all"
         )
     with open(path) as f:
@@ -112,7 +112,7 @@ def load_position_coverage(exp_type: str, operator: str) -> np.ndarray:
     if not os.path.exists(path):
         raise FileNotFoundError(
             f"Missing position coverage: {path}\n"
-            f"Run: uv run python projects/bert/build_position_severity.py --sa-rows 32 --sa-cols 32"
+            f"Run: uv run python projects/severity/build_position_severity.py --sa-rows 32 --sa-cols 32"
         )
     with open(path) as f:
         data = json.load(f)
@@ -172,7 +172,7 @@ def main():
     if args.output is None:
         stub = f"stuck{args.stuck_value}" if args.fault_type == "stuck-at" else "flip"
         suffix = f"_{args.formula}" if args.formula != "v3" else ""
-        args.output = os.path.join(CONFIG_DIR, f"joint_severity_{stub}_ws{suffix}.json")
+        args.output = os.path.join(TABLES_DIR, f"joint_severity_{stub}_ws{suffix}.json")
 
     # Load SA dimensions from position file
     pos_data = json.load(open(_position_filename()))

@@ -9,7 +9,7 @@ Two separate figures — input and weight — each 2 cols (sa0/sa1) × 3 rows
 (measured, calibrated, theoretical).
 
 Usage:
-  uv run python projects/bert/plot_calibration_comparison_heatmap.py
+  uv run python projects/severity/plot_calibration_comparison_heatmap.py
 """
 
 import csv
@@ -26,10 +26,10 @@ import numpy as np
 from scipy.stats import spearmanr
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-RESULT_DIR = os.path.join(SCRIPT_DIR, "result")
-V5_DIR = os.path.join(SCRIPT_DIR, "v5_severity")
-CONFIG_DIR = os.path.join(SCRIPT_DIR, "config")
-OUTPUT_DIR = os.path.join(SCRIPT_DIR, "comparison_results")
+RESULT_DIR = os.path.join(SCRIPT_DIR, "..", "..", "bert", "result")
+V5_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "v5_severity")
+TABLES_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "tables")
+OUTPUT_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "comparison_results")
 
 BITS = list(range(23, 31))
 COLS = list(range(32))
@@ -115,7 +115,7 @@ def theoretical_bit_unconditional(bit: int) -> float:
 
 
 def load_position_coverage() -> dict:
-    with open(os.path.join(CONFIG_DIR, "position_severity_ws.json")) as f:
+    with open(os.path.join(TABLES_DIR, "position_severity_ws.json")) as f:
         return json.load(f)
 
 

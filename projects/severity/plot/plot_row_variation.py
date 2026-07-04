@@ -13,8 +13,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_DIR = os.path.join(SCRIPT_DIR, "config")
-RESULT_DIR = os.path.join(SCRIPT_DIR, "result")
+OUTPUT_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "tables")
+RESULT_DIR = os.path.join(SCRIPT_DIR, "..", "..", "bert", "result")
 BITS = list(range(23, 31))
 
 def load_bit_matrix(path, bit):

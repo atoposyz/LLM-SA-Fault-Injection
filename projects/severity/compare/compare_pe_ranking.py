@@ -7,7 +7,7 @@ computes Spearman rho / Kendall tau at per-(type, bit, pe_col) level.
 This validates whether v5's reach multiplier improves PE-level ranking quality.
 
 Usage:
-  uv run python projects/bert/compare_pe_ranking.py
+  uv run python projects/severity/compare_pe_ranking.py
 """
 
 import csv
@@ -20,8 +20,8 @@ import numpy as np
 from scipy.stats import spearmanr, kendalltau
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_DIR = os.path.join(SCRIPT_DIR, "config")
-RESULT_DIR = os.path.join(SCRIPT_DIR, "result")
+TABLES_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "tables")
+RESULT_DIR = os.path.join(SCRIPT_DIR, "..", "..", "bert", "result")
 
 CSV_MAP = {
     ("input", 0): "pe_accuracy_input_stuck0.csv",
@@ -115,7 +115,7 @@ def compute_correlation(
 
 def main():
     # Discover joint severity tables
-    pattern = os.path.join(CONFIG_DIR, "joint_severity_stuck*_ws*.json")
+    pattern = os.path.join(TABLES_DIR, "joint_severity_stuck*_ws*.json")
     paths = sorted(glob.glob(pattern))
 
     print("=" * 80)

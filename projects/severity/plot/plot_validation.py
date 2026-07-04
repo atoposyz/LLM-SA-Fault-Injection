@@ -25,7 +25,7 @@ import numpy as np
 from scipy.stats import spearmanr
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_DIR = os.path.join(SCRIPT_DIR, "config")
+OUTPUT_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "tables")
 
 SAT_POINT = 10.0
 SIGN_RESILIENCE = 0.08
@@ -38,7 +38,7 @@ def load_data():
     for typ, src in [("input", "activation_input"), ("weight", "weight")]:
         for op in ["attention", "intermediate", "output"]:
             path = os.path.join(
-                SCRIPT_DIR, "config", f"severity_table_{src}_fp32_{op}.json"
+                os.path.dirname(SCRIPT_DIR), "tables", f"severity_table_{src}_fp32_{op}.json"
             )
             with open(path) as f:
                 t = json.load(f)
@@ -49,7 +49,7 @@ def load_data():
                     "p0": e["p0"],
                 }
 
-    with open(os.path.join(SCRIPT_DIR, "result", "combined_top1_position_long.csv")) as f:
+    with open(os.path.join(SCRIPT_DIR, "..", "..", "bert", "result", "combined_top1_position_long.csv")) as f:
         rows = list(csv.DictReader(f))
     baseline = max(float(r["top1"]) for r in rows)
 

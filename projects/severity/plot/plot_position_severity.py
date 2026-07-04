@@ -13,9 +13,9 @@ import matplotlib.ticker as mticker
 import matplotlib.colors as mcolors
 import numpy as np
 
-CONFIG_DIR = os.path.join(os.path.dirname(__file__), "config")
-JSON_PATH = os.path.join(CONFIG_DIR, "position_severity_ws.json")
-OUT_PATH = os.path.join(CONFIG_DIR, "position_severity_ws_heatmap.png")
+TABLES_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "tables")
+JSON_PATH = os.path.join(TABLES_DIR, "position_severity_ws.json")
+OUT_PATH = os.path.join(TABLES_DIR, "position_severity_ws_heatmap.png")
 
 MODES = ["weight", "input", "psum"]
 MODE_LABELS = {

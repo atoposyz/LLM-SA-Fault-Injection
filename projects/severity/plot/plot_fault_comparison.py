@@ -14,7 +14,7 @@ import numpy as np
 from scipy.stats import spearmanr
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_DIR = os.path.join(SCRIPT_DIR, "config")
+OUTPUT_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "tables")
 BITS = list(range(23, 32))
 
 
@@ -22,7 +22,7 @@ def load_cache():
     c = {}
     for typ, src in [("input", "activation_input"), ("weight", "weight")]:
         for op in ["attention", "intermediate", "output"]:
-            path = os.path.join(SCRIPT_DIR, "config", f"severity_table_{src}_fp32_{op}.json")
+            path = os.path.join(os.path.dirname(SCRIPT_DIR), "tables", f"severity_table_{src}_fp32_{op}.json")
             with open(path) as f:
                 t = json.load(f)
             for e in t["table"]:
@@ -145,8 +145,8 @@ def draw_figure(typ, cache, old_data, output_path):
 def main():
     cache = load_cache()
     old_data = {
-        ("input",  1): load_bit_csv(os.path.join(SCRIPT_DIR, "result", "accuracy_drop_plot_form_input_stuck_1.csv"),  "stuck_1_input_acc_drop"),
-        ("weight", 1): load_bit_csv(os.path.join(SCRIPT_DIR, "result", "accuracy_drop_plot_form_weight_stuck_1.csv"), "stuck_1_weight_acc_drop"),
+        ("input",  1): load_bit_csv(os.path.join(SCRIPT_DIR, "..", "..", "bert", "result", "accuracy_drop_plot_form_input_stuck_1.csv"),  "stuck_1_input_acc_drop"),
+        ("weight", 1): load_bit_csv(os.path.join(SCRIPT_DIR, "..", "..", "bert", "result", "accuracy_drop_plot_form_weight_stuck_1.csv"), "stuck_1_weight_acc_drop"),
     }
 
     draw_figure("input",  cache, old_data, os.path.join(OUTPUT_DIR, "validation_v3v4_input.png"))

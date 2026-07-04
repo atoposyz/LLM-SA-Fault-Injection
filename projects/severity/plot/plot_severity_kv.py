@@ -16,7 +16,7 @@ COLORS = {"key": "#2196F3", "value": "#FF5722"}
 def load_kv(source: str):
     data = {}
     for module in ("key", "value"):
-        path = f"projects/bert/config/severity_table_{source}_fp32_{module}.json"
+        path = f"projects/severity/tables/severity_table_{source}_fp32_{module}.json"
         with open(path) as f:
             t = json.load(f)
         entries = t["table"]
@@ -91,7 +91,7 @@ def plot():
         "boltuix/bert-emotion  —  Key/Value projection layers only",
         fontsize=13, fontweight="bold", y=1.01,
     )
-    out_path = "projects/bert/config/severity_kv_comparison.png"
+    out_path = "projects/severity/tables/severity_kv_comparison.png"
     plt.savefig(out_path, dpi=150, bbox_inches="tight", facecolor="white")
     print(f"Saved: {out_path}")
     plt.close()

@@ -4,8 +4,8 @@ from collections import defaultdict
 import numpy as np
 from scipy.stats import spearmanr, kendalltau
 
-CONFIG_DIR = os.path.join(os.path.dirname(__file__), "config")
-RESULT_DIR = os.path.join(os.path.dirname(__file__), "result")
+TABLES_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "tables")
+RESULT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "bert", "result")
 
 def load_pe_accuracy(fname):
     by_key = defaultdict(list)
@@ -37,9 +37,9 @@ for fname, stuck in [("pe_accuracy_input_stuck1_single.csv", 1),
     results = []
     for formula in ["v3", "v4", "v5_lin", "v5_exp"]:
         if formula == "v3":
-            sv_path = os.path.join(CONFIG_DIR, f"joint_severity_stuck{stuck}_ws.json")
+            sv_path = os.path.join(TABLES_DIR, f"joint_severity_stuck{stuck}_ws.json")
         else:
-            sv_path = os.path.join(CONFIG_DIR, f"joint_severity_stuck{stuck}_ws_{formula}.json")
+            sv_path = os.path.join(TABLES_DIR, f"joint_severity_stuck{stuck}_ws_{formula}.json")
         if not os.path.exists(sv_path):
             print(f"  {formula:>8s}: file not found")
             continue

@@ -1,7 +1,7 @@
 """
 Plot PE-level validation: v4 vs v5_lin joint severity vs measured acc_drop.
 
-Outputs saved to config/:
+Outputs saved to tables/:
   - pe_validation_heatmap_input.png   : per-(bit, col) heatmaps (pred vs true)
   - pe_validation_scatter_input.png   : scatter plots (pred vs true)
   - pe_validation_col_gradient.png    : column gradient (reach vs measured drop)
@@ -19,9 +19,9 @@ import numpy as np
 from scipy.stats import spearmanr
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_DIR = os.path.join(SCRIPT_DIR, "config")
-RESULT_DIR = os.path.join(SCRIPT_DIR, "result")
-OUTPUT_DIR = CONFIG_DIR
+TABLES_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "tables")
+RESULT_DIR = os.path.join(SCRIPT_DIR, "..", "..", "bert", "result")
+OUTPUT_DIR = TABLES_DIR
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -91,7 +91,7 @@ def plot_heatmaps():
 
         for fi, formula in enumerate(FORMULAS_TO_PLOT):
             col_idx = fi + 1
-            sv_path = os.path.join(CONFIG_DIR, f"joint_severity_stuck{stuck_value}_ws"
+            sv_path = os.path.join(TABLES_DIR, f"joint_severity_stuck{stuck_value}_ws"
                                                 f"{'_' + formula if formula != 'v3' else ''}.json")
             if not os.path.exists(sv_path):
                 continue
@@ -128,7 +128,7 @@ def plot_scatter():
 
         for fi, formula in enumerate(FORMULAS_TO_PLOT):
             ax = axes[row_idx, fi]
-            sv_path = os.path.join(CONFIG_DIR, f"joint_severity_stuck{stuck_value}_ws"
+            sv_path = os.path.join(TABLES_DIR, f"joint_severity_stuck{stuck_value}_ws"
                                                 f"{'_' + formula if formula != 'v3' else ''}.json")
             if not os.path.exists(sv_path):
                 continue
@@ -176,8 +176,8 @@ def plot_col_gradient():
         ax.plot(cols_sorted, acc_norm, "ko-", linewidth=2.5, markersize=6, label="Measured acc_drop (norm)")
 
         # Predicted reach (v5_lin and v5_exp)
-        sv_lin = os.path.join(CONFIG_DIR, "joint_severity_stuck{}_ws_v5_lin.json".format(stuck_value))
-        sv_exp = os.path.join(CONFIG_DIR, "joint_severity_stuck{}_ws_v5_exp.json".format(stuck_value))
+        sv_lin = os.path.join(TABLES_DIR, "joint_severity_stuck{}_ws_v5_lin.json".format(stuck_value))
+        sv_exp = os.path.join(TABLES_DIR, "joint_severity_stuck{}_ws_v5_exp.json".format(stuck_value))
 
         for sv_path, label, style in [
             (sv_lin, "v5_lin reach (C/C_min)", "s--"),

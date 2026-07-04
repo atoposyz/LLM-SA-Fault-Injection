@@ -31,7 +31,7 @@ from datetime import datetime
 import torch
 from transformers import AutoTokenizer, AutoModel, logging as hf_logging
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../tool/src"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../tool/src"))
 from tool.bit_severity import (
     apply_theoretical_floor,
     build_severity_lookup_table,
@@ -437,7 +437,7 @@ def main():
     parser.add_argument("--activation-kind", type=str, choices=["input", "output", "both"], default="input",
                         help="Which activations to collect")
     parser.add_argument("--output-dir", type=str, default=None,
-                        help="Output directory (default: projects/bert/config/)")
+                        help="Output directory (default: projects/severity/tables/)")
     parser.add_argument("--transform", type=str, choices=["log1p", "identity"], default="log1p",
                         help="Severity stabilising transform")
     parser.add_argument("--clip-value", type=float, default=None,
@@ -453,7 +453,7 @@ def main():
         print("[WARNING] CUDA not available, using CPU")
 
     if args.output_dir is None:
-        args.output_dir = os.path.join(os.path.dirname(__file__), "config")
+        args.output_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "tables")
     output_dir = args.output_dir
     os.makedirs(output_dir, exist_ok=True)
 

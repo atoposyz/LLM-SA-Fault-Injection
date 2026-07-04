@@ -6,9 +6,9 @@ mean / max / top-k mean, then computes Spearman rho and Kendall tau against
 CSV ground-truth accuracy_drop.
 
 Usage:
-  uv run python projects/bert/compare_formula_ranking.py
-  uv run python projects/bert/compare_formula_ranking.py --top-k 20
-  uv run python projects/bert/compare_formula_ranking.py --top-k 15%
+  uv run python projects/severity/compare_formula_ranking.py
+  uv run python projects/severity/compare_formula_ranking.py --top-k 20
+  uv run python projects/severity/compare_formula_ranking.py --top-k 15%
 """
 
 import argparse
@@ -22,8 +22,8 @@ import numpy as np
 from scipy.stats import spearmanr, kendalltau
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_DIR = os.path.join(SCRIPT_DIR, "config")
-RESULT_DIR = os.path.join(SCRIPT_DIR, "result")
+TABLES_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "tables")
+RESULT_DIR = os.path.join(SCRIPT_DIR, "..", "..", "bert", "result")
 
 # Maps (type, stuck_value) → CSV filename
 CSV_MAP = {
@@ -39,7 +39,7 @@ def discover_tables() -> dict[str, list[str]]:
 
     Returns {(stub_key, stuck_value): [path, ...]} where stub_key is e.g. 'joint_severity_stuck1_ws'.
     """
-    pattern = os.path.join(CONFIG_DIR, "joint_severity_stuck*_ws*.json")
+    pattern = os.path.join(TABLES_DIR, "joint_severity_stuck*_ws*.json")
     paths = sorted(glob.glob(pattern))
 
     groups: dict[tuple[str, int], list[str]] = defaultdict(list)
