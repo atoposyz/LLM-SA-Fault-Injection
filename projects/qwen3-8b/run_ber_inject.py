@@ -15,6 +15,7 @@ from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer, logging
 
 from tool.ber_injector import BER_Fast_SA_FaultInjector
+from tool.grouped_injector import GroupedExact_SA_FaultInjector, GlobalCoverage_SA_FaultInjector
 
 logging.set_verbosity_error()
 os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
@@ -173,7 +174,8 @@ def _run_sample(df, reg, ber, expected_faults, num_regs, reg_map, idx, sample,
 # ---------------------------------------------------------------------------
 
 
-def _run_combo(df, reg, ber, out_path, samples, tokenizer, model, reg_map):
+def _run_combo(df, reg, ber, out_path, samples, tokenizer, model, reg_map,
+               inject_mode="exact"):
     ber_str = f"{ber:.0e}".replace("e-0", "e-").replace("e+0", "e")
     fname = f"ber_{ber_str}_df{df}_reg{reg}.jsonl"
     filepath = out_path + fname
@@ -203,10 +205,17 @@ def _run_combo(df, reg, ber, out_path, samples, tokenizer, model, reg_map):
 
     # injector — use "WS" as placeholder for random mode (overridden per sample)
     initial_df = "WS" if df == "random" else df
-    injector = BER_Fast_SA_FaultInjector(
+    inj_cls = {
+        "exact": BER_Fast_SA_FaultInjector,
+        "grouped_exact": GroupedExact_SA_FaultInjector,
+        "coverage": GlobalCoverage_SA_FaultInjector,
+    }[inject_mode]
+    injector = inj_cls(
         sa_rows=256, sa_cols=256, dataflow=initial_df,
         fault_type="weight_stuck_0_0", precision="bf16")
     injector.enabled = True
+    if inject_mode != "exact":
+        print(f"[INFO] using {inject_mode} injector")
 
     # sample loop
     with open(filepath, "a", encoding="utf-8") as f:
@@ -251,6 +260,8 @@ def main():
     parser.add_argument("--filter-ber", type=float, nargs="*",
                         default=BER_VALUES)
     parser.add_argument("--num-samples", "-n", type=int, default=200)
+    parser.add_argument("--mode", type=str, choices=["exact", "grouped_exact", "coverage"],
+                        default="exact")
     parser.add_argument("--no-cache-priority", action="store_true")
     args = parser.parse_args()
 
@@ -284,7 +295,8 @@ def main():
     reg_map = {"input": 0, "weight": 1, "psum": 2}
 
     for df, reg, ber in combos:
-        _run_combo(df, reg, ber, out_path, samples, tokenizer, model, reg_map)
+        _run_combo(df, reg, ber, out_path, samples, tokenizer, model, reg_map,
+                   inject_mode=args.mode)
 
 
 if __name__ == "__main__":

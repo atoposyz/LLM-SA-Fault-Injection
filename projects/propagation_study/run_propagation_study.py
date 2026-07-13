@@ -214,11 +214,13 @@ def _compute_accuracy(jsonl_path: str) -> float:
         ref_ans = extract_final_number(d["reference_answer"])
         gen_ans = extract_final_number(d["generated_answer"])
         if ref_ans is None or gen_ans is None:
+            comparable += 1
             continue
         try:
             ref_num = float(ref_ans)
             gen_num = float(gen_ans)
         except ValueError:
+            comparable += 1
             continue
         comparable += 1
         if abs(ref_num - gen_num) < 0.01:
@@ -285,7 +287,7 @@ def _run_combo(bit: int, stuck_val: str, p: int, target_layers: list,
         sa_rows=256, sa_cols=256,
         dataflow="WS",
         fault_type=fault_type,
-        precision="fp32",
+        precision="bf16",
     )
     injector.enabled = True
     injector.set_fault_position(0, 0)

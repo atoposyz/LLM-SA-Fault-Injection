@@ -19,7 +19,8 @@ class BER_Fast_SA_FaultInjector:
         self.fault_pe_col = []
         self.fault_reg = []
         self.fault_bit = []
-        self._pe_mask_cache = {}  
+        self._pe_mask_cache = {}
+        self._fault_generation = 0
         
         self.parse_fault_type()
 
@@ -50,6 +51,7 @@ class BER_Fast_SA_FaultInjector:
         self.fault_reg.clear()
         self.fault_bit.clear()
         self._pe_mask_cache.clear()
+        self._fault_generation += 1
 
     def init_faults_by_ber(self, ber: float, num_regs: int = 1, num_bits: int = 16):
         """直接通过误码率(BER)全局撒错"""
@@ -100,7 +102,7 @@ class BER_Fast_SA_FaultInjector:
         return out.to(orig_dtype)
 
     def _build_pe_mask_map(self, device):
-        fingerprint = len(self.fault_pe_row)
+        fingerprint = self._fault_generation
         device_key = str(device)
         cached = self._pe_mask_cache.get(device_key)
         if cached is not None and cached[1] == fingerprint:
@@ -177,12 +179,11 @@ class BER_Fast_SA_FaultInjector:
                 r, c = point[0].item(), point[1].item()
                 mask_val = pe_mask_map[r, c]
                 affected_j = torch.where((torch.arange(N, device=device) % self.sa_cols) == c)[0]
-                scale = max((K - r) / K, 0.0) if K > 0 else 1.0
                 if affected_j.numel() > 0:
                     col_data = Y[:, affected_j]
                     mask_tensor = mask_val.expand(col_data.shape)
                     flipped = self._inject_bit_error(col_data, mask_tensor, op)
-                    Y_tilde[:, affected_j] += (flipped - col_data) * scale
+                    Y_tilde[:, affected_j] += flipped - col_data
             return Y_tilde
         return torch.matmul(X, W)
 
@@ -244,10 +245,9 @@ class BER_Fast_SA_FaultInjector:
             for point in torch.nonzero(pe_mask_map):
                 r, c = point[0].item(), point[1].item()
                 affected_i = torch.where((torch.arange(M, device=device) % self.sa_rows) == r)[0]
-                scale = max((K - c) / K, 0.0) if K > 0 else 1.0
                 if affected_i.numel() > 0:
                     row_data = Y[affected_i, :]
                     flipped = self._inject_bit_error(row_data, pe_mask_map[r, c].expand(row_data.shape), op)
-                    Y_tilde[affected_i, :] += (flipped - row_data) * scale
+                    Y_tilde[affected_i, :] += flipped - row_data
             return Y_tilde
         return Y
